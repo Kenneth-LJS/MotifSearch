@@ -3,72 +3,80 @@
 <head> <meta charset="UTF-8">
 	<title>Giphy Search</title>
 	<script type = "text/javascript">
-		var api_key = "dc6zaTOxFJmzC" // giphy public API key
-		var searchSize = 25; // max 100
+		const api_key = "dc6zaTOxFJmzC" // giphy public API key
+		const searchSize = 3; // max 100	
+		var displayedImgs = {};
 		
-		var pagesLoaded = 0;
+		function search(searchTerms, searchChain) {
+			var pagesLoaded = -1;
+			var curData = [];
+			var history = searchChain.concat([searchTerms]);
+			function nextImage(callback) {
+				if (curData.length == 0) {
+					nextPage(callback);
+				} else {
+					var img = curData.splice(0, 1)[0]; // removes the first gif in line
+					img = parseImgData(img);
+					img['history'] = history;
+					getImgTags(img, function(tags) {
+											img['tags'] = tags;
+											callback(img);
+										});
+				}
+			}
+			function nextPage(callback) {
+				pagesLoaded++;
+				var searchUrl = 'http://api.giphy.com/v1/gifs/search?q=' + searchTerms.join("+").split(" ").join("+") + '&api_key=' + api_key + '&limit=' + searchSize + '&offset=' + (pagesLoaded * searchSize);
+				getHTML(searchUrl, function(rawData) {
+										var data = rawData.replace("<html><head/><body>", "").replace("</body></html>", "").trim();
+										curData = JSON.parse(data)['data'];
+										nextImage(callback);
+									});
+			}
+			return nextImage;
+		}
+	
+		function parseImgData(imgData) {
+			var img = {};
+			img['id'] = imgData['id'];
+			//img['src'] = "https://media.giphy.com/media/" + img["id"] + "/giphy.gif"; // change for resolution
+			img['src'] = imgData['images']['fixed_height_small']['url']; // change for resolution
+			img['url'] = imgData['url'];
+			img['tags'] = [];
+			img['similar'] = [];
+			return img;
+		}
 		
-		var searchIndex = 0;
-		
-		var src = 'http://rlv.zcache.com/the_original_smiley_face_classic_round_sticker-r8c41697f171a4d97975ffd6ce27b8c3e_v9waf_8byvr_324.jpg';
-		
+		function getImgTags(img, callback) {
+			getHTML(img['url'], function(rawTagData) {
+									var lines = rawTagData.split('\n');
+									var tags = [];
+									for (var i = 0; i < lines.length - 1; i++) {
+										if (lines[i].trim() == '<h3 class="tag">') {
+											tags.push(lines[i + 1].split('>')[1].split('<')[0]);
+										}
+									}
+									callback(tags);
+								});
+		}
+
 		function keypress(event) {
 			if (event.keyCode == 13) {
 				event.preventDefault();
 				if (document.getElementById('searchTb').value != "") {
-					firstSearch();
+					buttonPressed();
 				}
 			}
 		}
 		
+		function buttonPressed() {
+			firstSearch();
+		}
+		
 		function firstSearch() {
-			var searchDiv = document.getElementById('search');
-			searchTerms = document.getElementById('searchTb').value;
-			searchDiv.parentNode.remove(searchDiv);
-			search(searchTerms, searchSize, 0, function(imgs) { firstSearch2(searchTerms, imgs); } );
-		}
-		
-		function firstSearch2(searchTerms, imgs) {
-			imgs = groupImgs(imgs);
-			console.log(imgs);
-			displayImgs(searchTerms, imgs);
-		}
-		
-		function search(terms, count, offset, callback) {
-			console.log("Searching: " + terms);
-			var searchUrl = 'http://api.giphy.com/v1/gifs/search?q=' + terms.split(" ").join("+") + '&api_key=' + api_key + '&limit=' + count + '&offset=' + offset;
-			getHTML(searchUrl, function(data) { search2(data, callback); });
-		}
-		
-		function search2(rawData, callback) {
-			var data = rawData.replace("<html><head/><body>", "").replace("</body></html>", "").trim();
-			var imgObjs = JSON.parse(data)['data'];
-			var imgs = [];
-			for (var i = 0; i < imgObjs.length; i++) {
-				var imgObj = imgObjs[i];
-				var img = {};
-				img['id'] = imgObj['id'];
-				//img['src'] = "https://media.giphy.com/media/" + img["id"] + "/giphy.gif"; // change for resolution
-				img['src'] = imgObj['images']['fixed_height_small']['url']; // change for resolution
-				img['url'] = imgObj['url'];
-				img['tags'] = [];
-				img['related'] = [];
-				imgs.push(img);
-			}
-			search3(imgs, 0, undefined, callback);
-		}
-		
-		function search3(imgs, index, tags, callback) {
-			// callback(imgs); return; // skip getting tags
-			if (index > 0 && index <= imgs.length) {
-				imgs[index - 1]['tags'] = tags;
-			}
-			if (index >= imgs.length) {
-				callback(imgs);
-				return;
-			}
-			console.log("Getting tags: " + (index + 1) + '/' + imgs.length);
-			getHTML(imgs[index]['url'], function(rawTagData) { search3(imgs, index + 1, parseRawTagData(rawTagData), callback); });
+			var searchTerms = document.getElementById('searchTb').value.toLowerCase().split(" ");
+			deleteDiv("Search");
+			createResultsDiv("Search", search(searchTerms, []), false);
 		}
 		
 		function parseRawTagData(rawTagData) {
@@ -82,102 +90,104 @@
 			return tags;
 		}
 		
-		function groupImgs(imgs) {
-			function intersect(setA, setB) {
-				/*
-				var out = [];
-				for (var i = 0; i < setA.length; i++) {
-					if (setB.indexOf[setA[i]] != -1) {
-						out.push(setA[i]);
-					}
-				}
-				return out;
-				*/
-				var count = 0;
-				for (var i = 0; i < setA.length; i++) {
-					for (var j = 0; j < setB.length; j++) {
-						if (setA[i] == setB[j]) {
-							count++;
-						}
-					}
-				}
-				return count;
-			}
-			
-			function union(setA, setB) {
-				/*
-				var out = [];
-				for (var i = 0; i < setA.length; i++) {
-					if (setB.indexOf[setA[i]] == -1) {
-						out.push(setA[i]);
-					}
-				}
-				return out.concat(setB);
-				*/
-				return setA.length + setB.length - intersect(setA, setB);
-			}
-			
-			function tagOverlap(imgA, imgB) {
-				var setA = imgA['tags'];
-				var setB = imgB['tags'];
-				return intersect(setA, setB) / Math.max(1, union(setA, setB));
-			}
+		function resetSearch() {
+			deleteDiv("Search");
+			deleteDiv("Similar");
+			deleteDiv("Related");
+			displayedImgs = {};
+		}
 		
-			function extractBest() {
-				var maxIntersect = -1;
-				var maxIndex = -1;
-				for (var i = 0; i < imgs.length; i++) {
-					var totalIntersect = 0;
-					for (var j = 0; j < imgs.length; j++) {
-						totalIntersect += tagOverlap(imgs[i], imgs[j]);
-					}
-					if (totalIntersect > maxIntersect) {
-						maxIntersect = totalIntersect;
-						maxIndex = i;
+		function intersect(setA, setB) {
+			/*
+			var out = [];
+			for (var i = 0; i < setA.length; i++) {
+				if (setB.indexOf[setA[i]] != -1) {
+					out.push(setA[i]);
+				}
+			}
+			return out;
+			*/
+			var count = 0;
+			for (var i = 0; i < setA.length; i++) {
+				for (var j = 0; j < setB.length; j++) {
+					if (setA[i] == setB[j]) {
+						count++;
 					}
 				}
-				return imgs.splice(maxIndex, 1)[0];
 			}
-			
-			function extractRelated(img) {
-				var threshold = 0.6;
-				var filtered = [];
-				var index = 0;
-				while (index < imgs.length) {
-					if (tagOverlap(imgs[index], img) >= threshold) {
-						filtered.push(imgs.splice(index, 1)[0]);
-					} else {
-						index++;
-					}
+			return count;
+		}
+		
+		function union(setA, setB) {
+			/*
+			var out = [];
+			for (var i = 0; i < setA.length; i++) {
+				if (setB.indexOf[setA[i]] == -1) {
+					out.push(setA[i]);
 				}
-				return filtered;
 			}
-			
-			var imgGroups = [];
-			while (imgs.length > 0) {
-				var bestImg = extractBest();
-				var related = extractRelated(bestImg);
-				bestImg["related"] = related;
-				imgGroups.push(bestImg);
-			}
-			return imgGroups;
+			return out.concat(setB);
+			*/
+			return setA.length + setB.length - intersect(setA, setB);
+		}
+		
+		function tagOverlap(imgA, imgB) {
+			var setA = imgA['tags'];
+			var setB = imgB['tags'];
+			return intersect(setA, setB) / Math.max(1, union(setA, setB));
 		}
 		
 		function deleteDiv(name) {
 			var div = document.getElementById(name);
-			if (div != undefined) {
+			if (div != undefined && div != null) {
+				div.streaming = false;
 				div.parentNode.removeChild(div);
 			}
 		}
 		
-		function createResultsDiv(name) {
+		function createResultsDiv(name, stream, forceAdd) {
 			deleteDiv(name);
-			div = document.createElement('div');
+			var div = document.createElement('div');
 			div.setAttribute('id', name);
 			div.setAttribute('style', 'text-align:center');
 			div.innerHTML = "<p><label>" + name + "</label></p>";
+			div.imgs = [];	
+			div.streaming = true;
 			document.body.appendChild(div);
+			function displayNext() {
+				stream(function(img) {
+							if (img != undefined && div.streaming) {
+								addImage(div, img, forceAdd);
+								displayNext();
+							}
+						});
+			}
+			setTimeout(displayNext, 0);
 			return div;
+		}
+		
+		function addImage(div, img, forceAdd) {
+			if (displayedImgs[img['id']] != undefined) {
+				return; // already displayed
+			}
+			var maxThreshold = 0.6; // minimum to pass
+			var maxIndex = -1;
+			for (var i = 0; i < div.imgs.length; i++) {
+				var overlap = tagOverlap(div.imgs[i], img);
+				if (overlap >= maxThreshold) {
+					maxThreshold = overlap;
+					maxIndex = i;
+				}
+			}
+			if (maxIndex == -1 || forceAdd) {
+				displayedImgs[img['id']] = img;
+				div.imgs.push(img);
+				div.appendChild(createImg(img));
+			} else {
+				var similarImg = div.imgs[maxIndex];
+				similarImg['similar'].push(img);
+				displayedImgs[similarImg['id']] = similarImg;
+			}
 		}
 		
 		function createImg(img) {
@@ -185,53 +195,62 @@
 			newImg.setAttribute('src', img['src']);
 			newImg.setAttribute('style', 'display: inline-block');
 			newImg.setAttribute('title', img['tags'].join(", "));
-			newImg.setAttribute('onclick', "searchRelated('" + searchTerms + "', JSON.parse('" + JSON.stringify(img) + "'))");
+			newImg.setAttribute('onclick', 'searchRelated("' + img['id'] + '")');
 			return newImg;
 		}
-		
-		function displayImgs(searchTerms, imgs) {
-			var resultsDiv = createResultsDiv('Search');
-			deleteDiv('Related');
-			for (var i = 0; i < imgs.length; i++) {
-				resultsDiv.appendChild(createImg(imgs[i]));
-			}
-		}
-		
-		function searchRelated(originalTerm, img) {
-			deleteDiv('Search');
-			deleteDiv('Similar');
-			deleteDiv('Related');
-			var storedIndex = ++searchIndex;
-			if (img['related'].length > 0) {
-			var relatedDiv = createResultsDiv('Similar');
-				for (var i = 0; i < img['related'].length; i++) {
-					var relatedImg = img['related'][i];
-					relatedDiv.append(createImg(relatedImg));
+
+		function removeDuplicates(arr) {
+			var ret = [];
+			for (var i = 0; i < arr.length; i++) {
+				if (ret.indexOf(arr[i]) == -1) {
+					ret.push(arr[i]);
 				}
 			}
-			var tagSearches = [];
+			return ret;
+		}
+		
+		function relatedStream(img) {
+			var lastSearch = img['history'][img['history'].length - 1];
+			var nextSearches = [];
 			for (var i = 0; i < img['tags'].length; i++) {
-				if (originalTerm != img['tags'][i]) {
-					tagSearches.push(originalTerm + " " + img['tags'][i])
+				var tag = img['tags'][i];
+				var searchTerms = [lastSearch[lastSearch.length - 1]].concat([tag]);
+				console.log("Searching: " + searchTerms.join(" + "));
+				nextSearches.push(search(searchTerms, img['history']));
+			}
+			function next(callback) {
+				if (nextSearches.length == 0) {
+					callback(undefined);
+					return;
 				}
+				var curSearch = nextSearches.splice(0, 1)[0];
+				curSearch(function(result) {
+								if (result == undefined) {
+									next(callback);
+								} else {
+									nextSearches.push(curSearch);
+									callback(result);
+								}
+							});
 			}
-			batchSearch(tagSearches, 0, [], function(imgs) { if (storedIndex == searchIndex) { searchRelated2(imgs, createResultsDiv('Related')); } });
+			return next;
 		}
 		
-		function searchRelated2(imgs, resultsDiv) {
-			imgs = groupImgs(imgs);
-			for (var i = 0; i < imgs.length; i++) {
-				var relatedImg = imgs[i];
-				resultsDiv.append(createImg(relatedImg));
+		function searchRelated(imgId) {
+			var img = displayedImgs[imgId];
+			resetSearch();
+			var similarImgs = img['similar'];
+			if (similarImgs.length > 0) {
+				var i = 0;
+				createResultsDiv("Similar", function(callback) {
+												if (i < similarImgs.length) {
+													callback(similarImgs[i++]);
+												} else {
+													callback(undefined);
+												}
+											}, true);
 			}
-		}
-		
-		function batchSearch(searches, index, data, callback) {
-			if (index >= searches.length) {
-				callback(data);
-				return;
-			}
-			search(searches[index], Math.ceil(searchSize / searches.length), 0, function(imgs) { batchSearch(searches, index + 1, data.concat(imgs), callback); });
+			createResultsDiv("Related", relatedStream(img), false);
 		}
 		
 	</script>
@@ -323,11 +342,11 @@
 </head>
 
 <body>
-	<form>
+	<form id = "Search">
 		<fieldset>
-			<div id = "search">
+			<div>
 				<p><label>Search:</label> <input type = "text" id = "searchTb" onkeypress="keypress(event)"></p>
-				<p><button type = "button" onclick = "firstSearch()">Submit</button></p>
+				<p><button type = "button" onclick = "buttonPressed()">Submit</button></p>
 			</div>
 		</fieldset>
 	</form>
