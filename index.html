@@ -40,7 +40,7 @@
 			var img = {};
 			img['id'] = imgData['id'];
 			//img['src'] = "https://media.giphy.com/media/" + img["id"] + "/giphy.gif"; // change for resolution
-			img['src'] = imgData['images']['fixed_height_small']['url']; // change for resolution
+			img['src'] = imgData['images']['fixed_height_small']['url'].replace('http:', 'https:'); // change for resolution
 			img['url'] = imgData['url'];
 			img['tags'] = [];
 			img['similar'] = [];
