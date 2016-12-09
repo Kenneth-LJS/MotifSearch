@@ -41,7 +41,7 @@
 		}
 		
 		function search2(rawData, callback) {
-			var data = rawData.replace("<html><head/><body>", "").replace("</body></html>", "").trim();
+			var data = rawData.replace("<html><head><body>", "").replace("<\/body><\/html>", "").trim();
 			var imgObjs = JSON.parse(data)['data'];
 			var imgs = [];
 			for (var i = 0; i < imgObjs.length; i++) {
